@@ -1,10 +1,10 @@
 # scraper.py
 
+import time
 import requests
 from bs4 import BeautifulSoup
-import time
 
-# Selenium imports
+# Selenium imports (works locally but fails in Streamlit)
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -13,7 +13,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 
 # ---------------------------------------------------------
-# 1️⃣ PRIMARY: Selenium Search (works on your local PC)
+# 1️⃣ PRIMARY: Selenium Search (Local PC)
 # ---------------------------------------------------------
 def selenium_duckduckgo_search(query):
     try:
@@ -22,10 +22,9 @@ def selenium_duckduckgo_search(query):
         driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
         driver.get("https://lite.duckduckgo.com/lite/")
 
-        search_box = driver.find_element(By.NAME, "q")
-        search_box.send_keys(query)
-        search_box.send_keys(Keys.RETURN)
-
+        box = driver.find_element(By.NAME, "q")
+        box.send_keys(query)
+        box.send_keys(Keys.RETURN)
         time.sleep(2)
 
         html = driver.page_source
@@ -35,12 +34,11 @@ def selenium_duckduckgo_search(query):
         results = []
 
         for a in soup.select("a.result-link"):
-            url = a["href"]
-            title = a.text.strip()
+            title = a.get_text(strip=True)
+            url = a.get("href")
 
             if not url.startswith("http"):
                 continue
-
             if title.lower() in ["more info", "ad", "sponsored"]:
                 continue
 
@@ -55,24 +53,22 @@ def selenium_duckduckgo_search(query):
 
 
 # ---------------------------------------------------------
-# 2️⃣ FALLBACK: Cloud-Safe HTML Request (works on Streamlit)
+# 2️⃣ FALLBACK: Cloud-safe request search (Streamlit)
 # ---------------------------------------------------------
 def fallback_duckduckgo_search(query):
-    print("🌐 Falling back to cloud-safe DDG search...")
-
     try:
-        url = "https://duckduckgo.com/html/"
-        data = {"q": query}
+        print("🌐 Using fallback search (HTML)...")
 
-        r = requests.post(url, data=data, timeout=10)
+        r = requests.post("https://duckduckgo.com/html/", data={"q": query}, timeout=10)
         soup = BeautifulSoup(r.text, "html.parser")
 
         results = []
+
         for a in soup.select(".result__a"):
             title = a.get_text(strip=True)
-            href = a.get("href")
-            if href.startswith("http"):
-                results.append({"title": title, "url": href})
+            url = a.get("href")
+            if url.startswith("http"):
+                results.append({"title": title, "url": url})
 
         print(f"🌐 Fallback found {len(results)} results.")
         return results
@@ -83,14 +79,36 @@ def fallback_duckduckgo_search(query):
 
 
 # ---------------------------------------------------------
-# 3️⃣ MASTER SEARCH FUNCTION (Auto-switch)
+# 3️⃣ MASTER SEARCH FUNCTION (Auto Switch)
 # ---------------------------------------------------------
 def duckduckgo_search(query):
     # Try Selenium first
-    selenium_results = selenium_duckduckgo_search(query)
+    res = selenium_duckduckgo_search(query)
+    if res and len(res) > 0:
+        return res
 
-    if selenium_results and len(selenium_results) > 0:
-        return selenium_results
-
-    # If Selenium fails → Fallback
+    # Fallback for Streamlit cloud
     return fallback_duckduckgo_search(query)
+
+
+# ---------------------------------------------------------
+# FETCH PAGE CONTENT (used in agent.py)
+# ---------------------------------------------------------
+def fetch_page_text(url):
+    print(f"🌍 Fetching page: {url}")
+
+    try:
+        r = requests.get(url, timeout=10)
+        soup = BeautifulSoup(r.text, "html.parser")
+
+        paragraphs = [p.get_text(strip=True) for p in soup.find_all("p")]
+
+        if not paragraphs:
+            return ""
+
+        # Return first ~20 paragraphs (enough for summary)
+        return "\n".join(paragraphs[:20])
+
+    except Exception as e:
+        print("❌ Error fetching page:", e)
+        return ""
