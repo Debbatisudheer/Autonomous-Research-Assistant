@@ -9,3 +9,6 @@ webdriver-manager
 selenium
 python-dotenv
 bs4
+pypdf
+transformers
+torch
