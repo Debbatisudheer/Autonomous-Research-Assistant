@@ -1,0 +1,11 @@
+streamlit
+openai
+pinecone
+requests
+beautifulsoup4
+fpdf
+pdfminer.six
+webdriver-manager
+selenium
+python-dotenv
+bs4
